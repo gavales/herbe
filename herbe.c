@@ -25,6 +25,7 @@
 
 Display *display;
 Window window;
+Window imageWin;
 int exit_code = EXIT_DISMISS;
 
 static void die(const char *format, ...)
@@ -84,6 +85,7 @@ void expire(int sig)
 	event.type = ButtonPress;
 	event.xbutton.button = (sig == SIGUSR2) ? (ACTION_BUTTON) : (DISMISS_BUTTON);
 	XSendEvent(display, window, 0, 0, &event);
+	XSendEvent(display, imageWin, 0, 0, &event);
 	XFlush(display);
 }
 
@@ -192,14 +194,25 @@ int main(int argc, char *argv[])
 	if (corner == BOTTOM_LEFT || corner == BOTTOM_RIGHT)
 		y = screen_height - height - border_size * 2 - pos_y;
 
-	window = XCreateWindow(display, RootWindow(display, screen), x, y, width, height, border_size, DefaultDepth(display, screen),
-						   CopyFromParent, visual, CWOverrideRedirect | CWBackPixel | CWBorderPixel, &attributes);
+	window = XCreateWindow(display, RootWindow(display, screen),
+		x, y, width, height, border_size, DefaultDepth(display, screen),
+		CopyFromParent, visual,
+		CWOverrideRedirect | CWBackPixel | CWBorderPixel, &attributes);
+
+	imageWin = XCreateWindow(display, RootWindow(display, screen),
+		x - 100, y, 100, height, border_size, DefaultDepth(display, screen),
+		CopyFromParent, visual,
+		CWOverrideRedirect | CWBackPixel | CWBorderPixel, &attributes);
 
 	XftDraw *draw = XftDrawCreate(display, window, visual, colormap);
+
 	XftColorAllocName(display, visual, colormap, font_color, &color);
 
 	XSelectInput(display, window, ExposureMask | ButtonPress);
+	XSelectInput(display, imageWin, ExposureMask | ButtonPress);
+
 	XMapWindow(display, window);
+	XMapWindow(display, imageWin);
 
 	sem_t *mutex = sem_open("/herbe", O_CREAT, 0644, 1);
 	sem_wait(mutex);
@@ -218,9 +231,10 @@ int main(int argc, char *argv[])
 		if (event.type == Expose)
 		{
 			XClearWindow(display, window);
+			XClearWindow(display, imageWin);
 			for (int i = 0; i < num_of_lines; i++)
 				XftDrawStringUtf8(draw, &color, font, padding, line_spacing * i + text_height * (i + 1) + padding,
-								  (FcChar8 *)lines[i], strlen(lines[i]));
+					(FcChar8 *)lines[i], strlen(lines[i]));
 		}
 		else if (event.type == ButtonPress)
 		{
